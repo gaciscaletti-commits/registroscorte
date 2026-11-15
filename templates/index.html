@@ -1,0 +1,81 @@
+{% extends "base.html" %}
+{% block contenuto %}
+
+<section class="aggiunta">
+  <h2>Nuovo articolo</h2>
+  <form method="post" action="{{ url_for('articolo_nuovo') }}" class="riga">
+    <input type="text" name="nome" placeholder="Nome (es. Cibo per cani)" required>
+    <input type="text" name="categoria" placeholder="Categoria" list="categorie">
+    <datalist id="categorie">
+      <option value="cibo">
+      <option value="farmaci">
+      <option value="materiali">
+      <option value="pulizia">
+      <option value="generale">
+    </datalist>
+    <input type="text" name="unita" placeholder="Unità (pz, kg, l)" value="pz">
+    <input type="number" name="soglia_minima" placeholder="Soglia min" step="any" min="0" value="0">
+    <button type="submit">Aggiungi</button>
+  </form>
+</section>
+
+{% set sotto_soglia = articoli | selectattr('sotto_soglia') | list %}
+{% if sotto_soglia %}
+<section class="alert">
+  <h2>⚠️ Scorte sotto soglia</h2>
+  <ul>
+    {% for a in sotto_soglia %}
+    <li>{{ a.nome }}: {{ a.giacenza }} {{ a.unita }} (soglia: {{ a.soglia_minima }})</li>
+    {% endfor %}
+  </ul>
+</section>
+{% endif %}
+
+<section>
+  <h2>Scorte</h2>
+  {% if articoli %}
+  <table>
+    <thead>
+      <tr>
+        <th>Articolo</th>
+        <th>Categoria</th>
+        <th>Giacenza</th>
+        <th>Consumo/giorno</th>
+        <th>Autonomia stimata</th>
+        <th>Azioni</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for a in articoli %}
+      <tr class="{{ 'sotto-soglia' if a.sotto_soglia }}">
+        <td><a href="{{ url_for('dettaglio', articolo_id=a.id) }}">{{ a.nome }}</a></td>
+        <td>{{ a.categoria }}</td>
+        <td>{{ a.giacenza }} {{ a.unita }}</td>
+        <td>{{ '%.2f' % a.velocita if a.velocita else '—' }}</td>
+        <td>
+          {% if a.giorni_rimanenti is not none %}
+            ~{{ a.giorni_rimanenti | round(0, 'floor') | int }} giorni
+          {% else %}
+            —
+          {% endif %}
+        </td>
+        <td class="azioni">
+          <form method="post" action="{{ url_for('movimento', articolo_id=a.id) }}" class="riga compatta">
+            <input type="number" name="quantita" placeholder="Qta" step="any" min="0" required>
+            <button type="submit" name="tipo" value="carico">➕ Carico</button>
+            <button type="submit" name="tipo" value="scarico" class="rosso">➖ Scarico</button>
+          </form>
+          <form method="post" action="{{ url_for('articolo_elimina', articolo_id=a.id) }}"
+                onsubmit="return confirm('Eliminare {{ a.nome }} e tutti i suoi movimenti?');">
+            <button type="submit" class="elimina">Elimina</button>
+          </form>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p>Nessun articolo registrato. Aggiungi il primo qui sopra.</p>
+  {% endif %}
+</section>
+{% endblock %}
