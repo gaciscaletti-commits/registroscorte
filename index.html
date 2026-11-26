@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#1b5e20">
+<title>Registro Scorte</title>
+<style>
+  :root {
+    --green: #2e7d32; --light: #e8f5e9; --red: #c62828; --redlight: #ffebee;
+    --bg: #f4f6f4; --card: #ffffff; --text: #1f2a1f; --muted: #6b7d6b; --border: #dde5dd;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  body { margin: 0; font-family: system-ui, -apple-system, sans-serif; background: var(--bg); color: var(--text); padding-bottom: 90px; }
+  header { position: sticky; top: 0; z-index: 10; background: var(--green); color: white; padding: 14px 16px; }
+  header h1 { margin: 0; font-size: 1.2rem; }
+  header .sub { font-size: 0.85rem; opacity: 0.9; margin-top: 2px; }
+  .filters { display: flex; gap: 8px; padding: 10px 16px; position: sticky; top: 62px; background: var(--bg); z-index: 9; flex-wrap: wrap; }
+  .chip { border: 1px solid var(--border); background: var(--card); padding: 8px 14px; border-radius: 20px; font-size: 0.85rem; cursor: pointer; }
+  .chip.active { background: var(--green); color: white; border-color: var(--green); }
+  #search { flex: 1; min-width: 120px; border: 1px solid var(--border); border-radius: 20px; padding: 8px 14px; font-size: 0.85rem; }
+  main { padding: 4px 12px; }
+  .card { background: var(--card); border-radius: 12px; padding: 12px 14px; margin: 8px 0; border-left: 5px solid var(--green); }
+  .card.low { border-left-color: var(--red); background: var(--redlight); }
+  .row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+  .name { font-weight: 600; font-size: 0.95rem; flex: 1; }
+  .badge { font-size: 0.7rem; font-weight: 700; padding: 3px 8px; border-radius: 10px; white-space: nowrap; }
+  .ok .badge { background: var(--light); color: var(--green); }
+  .low .badge { background: var(--red); color: white; }
+  .stepper { display: flex; align-items: center; gap: 10px; margin-top: 8px; }
+  .stepper button { width: 44px; height: 44px; border-radius: 10px; border: 1px solid var(--border); background: var(--light); font-size: 1.3rem; color: var(--green); }
+  .stepper input { width: 90px; height: 44px; text-align: center; font-size: 1.1rem; border: 1px solid var(--border); border-radius: 10px; }
+  .meta { font-size: 0.78rem; color: var(--muted); margin-top: 6px; }
+  .nostock { color: #a1887f; }
+  .bar { height: 6px; background: var(--border); border-radius: 3px; margin-top: 8px; overflow: hidden; }
+  .bar div { height: 100%; background: var(--green); border-radius: 3px; }
+  .low .bar div { background: var(--red); }
+  .actions { display: flex; gap: 8px; margin-top: 10px; }
+  .btn { border: 1px solid var(--border); background: var(--card); border-radius: 10px; padding: 8px 12px; font-size: 0.8rem; cursor: pointer; }
+  .btn.danger { color: var(--red); }
+  .btn.primary { background: var(--green); color: white; border-color: var(--green); }
+  .edit { display: none; margin-top: 10px; border-top: 1px dashed var(--border); padding-top: 10px; }
+  .edit.open { display: block; }
+  .edit label { display: block; font-size: 0.75rem; color: var(--muted); margin: 8px 0 3px; }
+  .edit input { width: 100%; padding: 8px; border: 1px solid var(--border); border-radius: 8px; font-size: 0.95rem; }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  nav { position: fixed; bottom: 0; left: 0; right: 0; background: var(--green); display: flex; padding: 12px 16px calc(12px + env(safe-area-inset-bottom)); gap: 10px; }
+  nav button { flex: 1; border: none; border-radius: 12px; padding: 13px; font-size: 0.9rem; font-weight: 600; cursor: pointer; }
+  dialog { border: none; border-radius: 16px; width: min(92vw, 420px); padding: 18px; max-height: 80vh; }
+  dialog::backdrop { background: rgba(0,0,0,0.4); }
+  dialog h2 { margin: 0 0 12px; font-size: 1.05rem; }
+  dialog ul { margin: 0; padding-left: 20px; }
+  dialog li { margin: 6px 0; font-size: 0.95rem; }
+  .empty { text-align: center; color: var(--muted); padding: 40px 0; }
+  form#addform .grid2 label input { margin-top: 3px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Registro Scorte</h1>
+  <div class="sub" id="summary"></div>
+</header>
+
+<div class="filters">
+  <button class="chip active" id="f-all">Tutti</button>
+  <button class="chip" id="f-low">Da ordinare</button>
+  <button class="chip" id="f-add">+ Aggiungi</button>
+  <input id="search" type="search" placeholder="Cerca...">
+</div>
+
+<main id="list"></main>
+<div class="empty" id="empty" style="display:none">Nessun elemento</div>
+
+<nav>
+  <button class="btn primary" id="open-shopping">Lista spesa</button>
+</nav>
+
+<dialog id="shoppingDlg">
+  <h2>Da ricomprare <span id="shopCount"></span></h2>
+  <ul id="shoppingList"></ul>
+  <p class="empty" id="shopEmpty" style="display:none">Tutto a posto, niente da ordinare.</p>
+  <div class="actions">
+    <button class="btn" onclick="copyShopping()">Copia</button>
+    <button class="btn primary" onclick="document.getElementById('shoppingDlg').close()">Chiudi</button>
+  </div>
+</dialog>
+
+<dialog id="addDlg">
+  <h2>Nuovo articolo</h2>
+  <form id="addform">
+    <label>Nome<input name="name" required></label>
+    <div class="grid2">
+      <div><label>Unità<input name="unit" placeholder="scatole, kg..." required></label></div>
+      <div><label>Quantità attuale<input name="qty" type="number" step="0.25" min="0" value="0"></label></div>
+      <div><label>Soglia d'ordine<input name="soglia" type="number" step="0.25" min="0" required></label></div>
+      <div><label>Max stock<input name="max" type="number" step="0.25" min="0"></label></div>
+    </div>
+    <div class="actions">
+      <button type="button" class="btn" onclick="document.getElementById('addDlg').close()">Annulla</button>
+      <button type="submit" class="btn primary">Aggiungi</button>
+    </div>
+  </form>
+</dialog>
+
+<script>
+var KEY = 'registroscorte-v1';
+var DEFAULTS = [
+  { name: 'Royal Canin Baby Dog', unit: 'kg', qty: 0, soglia: 1, max: 5 },
+  { name: 'Herbivore Care', unit: 'confezioni', qty: 0, soglia: 1, max: 5 },
+  { name: 'Carnivore Care', unit: 'confezioni', qty: 0, soglia: 1, max: 5 },
+  { name: 'Linfastecco', unit: 'barattoli', qty: 0, soglia: 1, max: 5 },
+  { name: 'Nutribird', unit: 'barattoli', qty: 0, soglia: 2, max: 10 },
+  { name: 'Steccopast', unit: 'barattoli', qty: 0, soglia: 3, max: 15 },
+  { name: 'Insettivoro', unit: 'kg', qty: 0, soglia: 6, max: 30 },
+  { name: 'Camole', unit: 'vasche', qty: 0, soglia: 2, max: 10 },
+  { name: 'Caimani', unit: 'vasche', qty: 0, soglia: 1, max: 5 },
+  { name: 'Grilli', unit: 'confezioni', qty: 0, soglia: 3, max: 15 },
+  { name: 'Truciolo pressato', unit: 'sacchi', qty: 0, soglia: 1, max: 5 },
+  { name: 'Fieno', unit: 'sacchi', qty: 0, soglia: 2, max: 10 },
+  { name: 'Crusca', unit: 'barili', qty: 0, soglia: 0.25, max: 1.25 },
+  { name: 'Pulcini', unit: 'scatole', qty: 0, soglia: 2, max: 10 },
+  { name: 'Macinato', unit: 'confezioni', qty: 0, soglia: 1, max: 5 },
+  { name: 'Latte di capra', unit: 'litri', qty: 0, soglia: 2, max: 10 },
+  { name: 'Crocchette gatto', unit: 'kg', qty: 0, soglia: 1.5, max: 7.5 },
+  { name: 'Bocconcini gatto', unit: 'barattoli', qty: 0, soglia: 6, max: 30 },
+  { name: 'Paté gatto', unit: 'barattoli', qty: 0, soglia: 6, max: 30 },
+  { name: 'Insalata', unit: 'cesti', qty: 0, soglia: 1, max: 5 },
+  { name: 'Mix polli', unit: 'barili', qty: 0, soglia: 0.25, max: 1.25 },
+  { name: 'Scottecs', unit: 'rotoli', qty: 0, soglia: 6, max: 30 },
+  { name: 'Guanti L', unit: 'confezioni', qty: 0, soglia: 3, max: 15 },
+  { name: 'Guanti M', unit: 'confezioni', qty: 0, soglia: 3, max: 15 },
+  { name: 'Steramina', unit: 'confezioni', qty: 0, soglia: 6, max: 30 },
+  { name: 'Amuchina', unit: 'confezioni', qty: 0, soglia: 1, max: 5 },
+  { name: 'Alcool', unit: 'confezioni', qty: 0, soglia: 2, max: 10 },
+  { name: 'Mais grosso', unit: 'barili', qty: 0, soglia: 0.25, max: 1.25 },
+  { name: 'Mele', unit: 'sacchi', qty: 0, soglia: 1, max: 5 },
+  { name: 'Giornali', unit: 'mensola', qty: 0, soglia: 0.5, max: 2.5 },
+  { name: 'Sacchi umido', unit: 'sacchi', qty: 0, soglia: 3, max: 15 },
+  { name: 'Sacchi neri', unit: 'sacchi', qty: 0, soglia: 3, max: 15 }
+];
+
+var state = load();
+function load() {
+  try { var d = JSON.parse(localStorage.getItem(KEY)); if (d && d.items) return d; } catch (e) {}
+  return { items: DEFAULTS.map(function (x) { return Object.assign({}, x); }) };
+}
+function save() { localStorage.setItem(KEY, JSON.stringify(state)); }
+function fmt(n) { return (Math.round(n * 100) / 100).toString().replace('.', ','); }
+
+var filter = 'all';
+var order = state.items.map(function (x) { return x.name; });
+
+function render() {
+  var q = document.getElementById('search').value.toLowerCase();
+  var listEl = document.getElementById('list');
+  listEl.innerHTML = '';
+  var shown = 0, lowCount = 0;
+  state.items.forEach(function (it, i) {
+    var low = it.qty < it.soglia;
+    if (low) lowCount++;
+    if (filter === 'low' && !low) return;
+    if (q && it.name.toLowerCase().indexOf(q) < 0) return;
+    shown++;
+    var card = document.createElement('div');
+    card.className = 'card ' + (low ? 'low' : 'ok');
+    var pct = Math.min(100, it.max > 0 ? (it.qty / it.max) * 100 : 100);
+    card.innerHTML =
+      '<div class="row"><div class="name">' + it.name + '</div>' +
+      '<span class="badge">' + (low ? 'DA ORDINARE' : 'OK') + '</span></div>' +
+      '<div class="stepper">' +
+      '<button onclick="step(' + i + ',-1)">−</button>' +
+      '<input type="number" step="0.25" min="0" value="' + it.qty + '" onchange="setQty(' + i + ',this.value)">' +
+      '<button onclick="step(' + i + ',1)">+</button>' +
+      '<span class="meta">' + it.unit + '</span></div>' +
+      '<div class="bar"><div style="width:' + pct + '%"></div></div>' +
+      '<div class="meta">Soglia: ' + fmt(it.soglia) + ' · Max: ' + fmt(it.max) + ' ' + it.unit + '</div>' +
+      '<div class="actions">' +
+      (low ? '<button class="btn primary" onclick="restock(' + i + ')">Rifornito (porta a ' + fmt(it.max) + ')</button>' : '') +
+      '<button class="btn" onclick="toggleEdit(' + i + ',this)">Modifica</button>' +
+      '<button class="btn danger" onclick="del(' + i + ')">Elimina</button></div>' +
+      '<div class="edit" id="edit' + i + '">' +
+      '<div class="grid2"><div><label>Nome<input value="' + it.name + '" onchange="setField(' + i + ',\'name\',this.value)"></label></div>' +
+      '<div><label>Unità<input value="' + it.unit + '" onchange="setField(' + i + ',\'unit\',this.value)"></label></div>' +
+      '<div><label>Soglia d\'ordine<input type="number" step="0.25" min="0" value="' + it.soglia + '" onchange="setField(' + i + ',\'soglia\',this.value)"></label></div>' +
+      '<div><label>Max stock<input type="number" step="0.25" min="0" value="' + it.max + '" onchange="setField(' + i + ',\'max\',this.value)"></label></div>' +
+      '</div><label>Soglia in 1/4 di barile = 0,25 · 1/2 mensola = 0,5</label></div>';
+    listEl.appendChild(card);
+  });
+  document.getElementById('empty').style.display = shown ? 'none' : 'block';
+  document.getElementById('summary').textContent = 'Da ordinare: ' + lowCount + ' su ' + state.items.length;
+}
+
+function step(i, d) { state.items[i].qty = Math.max(0, state.items[i].qty + d * 0.25); save(); render(); }
+function setQty(i, v) { state.items[i].qty = Math.max(0, parseFloat(v) || 0); save(); render(); }
+function setField(i, f, v) { state.items[i][f] = (f === 'soglia' || f === 'max') ? Math.max(0, parseFloat(v) || 0) : v; save(); render(); }
+function restock(i) { state.items[i].qty = state.items[i].max; save(); render(); }
+function del(i) { if (confirm('Eliminare ' + state.items[i].name + '?')) { state.items.splice(i, 1); save(); render(); } }
+function toggleEdit(i, btn) { document.getElementById('edit' + i).classList.toggle('open'); }
+
+document.getElementById('f-all').onclick = function () { filter = 'all'; chips(); render(); };
+document.getElementById('f-low').onclick = function () { filter = 'low'; chips(); render(); };
+document.getElementById('f-add').onclick = function () { document.getElementById('addDlg').showModal(); };
+document.getElementById('search').oninput = render;
+function chips() {
+  document.getElementById('f-all').classList.toggle('active', filter === 'all');
+  document.getElementById('f-low').classList.toggle('active', filter === 'low');
+}
+
+document.getElementById('addform').onsubmit = function (e) {
+  e.preventDefault();
+  var f = e.target;
+  var soglia = parseFloat(f.soglia.value) || 0;
+  var max = f.max.value !== '' ? parseFloat(f.max.value) : soglia * 5;
+  state.items.push({ name: f.name.value, unit: f.unit.value, qty: parseFloat(f.qty.value) || 0, soglia: soglia, max: max });
+  save(); f.reset(); document.getElementById('addDlg').close(); render();
+};
+
+function shopping() {
+  return state.items.filter(function (x) { return x.qty < x.soglia; })
+    .map(function (x) { return { name: x.name, buy: Math.max(0, x.max - x.qty), unit: x.unit, soglia: x.soglia, qty: x.qty }; })
+    .sort(function (a, b) { return a.name.localeCompare(b.name); });
+}
+document.getElementById('open-shopping').onclick = function () {
+  var s = shopping();
+  var ul = document.getElementById('shoppingList');
+  ul.innerHTML = '';
+  s.forEach(function (x) {
+    var li = document.createElement('li');
+    li.textContent = x.name + ': comprene ' + fmt(x.buy) + ' ' + x.unit + ' (ora ' + fmt(x.qty) + ')';
+    ul.appendChild(li);
+  });
+  document.getElementById('shopEmpty').style.display = s.length ? 'none' : 'block';
+  document.getElementById('shopCount').textContent = '(' + s.length + ')';
+  document.getElementById('shoppingDlg').showModal();
+};
+function copyShopping() {
+  var text = shopping().map(function (x) { return '- ' + x.name + ': ' + fmt(x.buy) + ' ' + x.unit; }).join('\n') || 'Niente da ordinare';
+  if (navigator.clipboard) navigator.clipboard.writeText(text);
+  else alert(text);
+}
+render();
+</script>
+</body>
+</html>

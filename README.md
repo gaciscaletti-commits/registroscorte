@@ -1,34 +1,17 @@
-# Registro Scorte — Centro Recupero Animali
+# Registro Scorte
 
-Semplice webapp locale per tenere traccia delle scorte (cibo, farmaci, materiali,
-pulizia) di un centro di recupero animali, con calcolo automatico della velocità
-di consumo e alert quando una scorta scende sotto la soglia minima.
+Checklist scorte per il centro di recupero fauna selvatica, pensata per mobile.
 
-## Requisiti
+- Ogni articolo ha quantità attuale, soglia d'ordine e max stock (default: 5x la soglia).
+- Se la quantità è inferiore alla soglia d'ordine, l'articolo viene segnalato **DA ORDINARE**.
+- Il pulsante "Rifornito" porta l'articolo al max stock.
+- "Lista spesa" mostra cosa comprare e quanto (max stock − quantità attuale), copiabile negli appunti.
+- I dati sono salvati nel browser (localStorage). Per condividerli tra più dispositivi serve sincronizzare il browser o esportare il file JSON.
 
-- Python 3.9+
-- Flask (`pip install flask`)
+## Uso
 
-## Avvio
+Host statico: abilitare GitHub Pages (Settings → Pages → Branch: main) e aprire l'URL generato, oppure aprire `index.html` direttamente.
 
-```bash
-pip install -r requirements.txt
-python app.py
-```
+## Nota quantità frazionarie
 
-Poi apri <http://127.0.0.1:5000> nel browser.
-
-Il database SQLite (`registro.db`) viene creato automaticamente al primo avvio.
-
-## Funzionalità
-
-- **Articoli**: nome, categoria, unità di misura (pz, kg, l...) e soglia minima.
-- **Movimenti**: carichi e scarichi con note e data, storico completo per articolo.
-- **Velocità di consumo**: calcolata dal primo all'ultimo scarico registrato
-  (unità/giorno), con stima dei giorni di autonomia rimanenti.
-- **Alert**: evidenzia gli articoli con giacenza pari o sotto la soglia minima.
-
-## Note
-
-L'app ascolta solo su `127.0.0.1`: è pensata per girare in locale sul server,
-esponibile poi tramite un proxy interno se serve accesso in rete locale.
+Soglie tipo "1/4 di barile" e "1/2 mensola" vanno inserite come 0,25 e 0,5.
