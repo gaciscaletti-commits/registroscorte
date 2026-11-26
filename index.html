@@ -31,11 +31,10 @@
   .stepper button { width: 44px; height: 44px; border-radius: 10px; border: 1px solid var(--border); background: var(--light); font-size: 1.3rem; color: var(--green); }
   .stepper input { width: 90px; height: 44px; text-align: center; font-size: 1.1rem; border: 1px solid var(--border); border-radius: 10px; }
   .meta { font-size: 0.78rem; color: var(--muted); margin-top: 6px; }
-  .nostock { color: #a1887f; }
   .bar { height: 6px; background: var(--border); border-radius: 3px; margin-top: 8px; overflow: hidden; }
   .bar div { height: 100%; background: var(--green); border-radius: 3px; }
   .low .bar div { background: var(--red); }
-  .actions { display: flex; gap: 8px; margin-top: 10px; }
+  .actions { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
   .btn { border: 1px solid var(--border); background: var(--card); border-radius: 10px; padding: 8px 12px; font-size: 0.8rem; cursor: pointer; }
   .btn.danger { color: var(--red); }
   .btn.primary { background: var(--green); color: white; border-color: var(--green); }
@@ -52,7 +51,6 @@
   dialog ul { margin: 0; padding-left: 20px; }
   dialog li { margin: 6px 0; font-size: 0.95rem; }
   .empty { text-align: center; color: var(--muted); padding: 40px 0; }
-  form#addform .grid2 label input { margin-top: 3px; }
 </style>
 </head>
 <body>
@@ -80,8 +78,8 @@
   <ul id="shoppingList"></ul>
   <p class="empty" id="shopEmpty" style="display:none">Tutto a posto, niente da ordinare.</p>
   <div class="actions">
-    <button class="btn" onclick="copyShopping()">Copia</button>
-    <button class="btn primary" onclick="document.getElementById('shoppingDlg').close()">Chiudi</button>
+    <button class="btn" id="copyBtn">Copia</button>
+    <button class="btn primary" id="shopClose">Chiudi</button>
   </div>
 </dialog>
 
@@ -96,7 +94,7 @@
       <div><label>Max stock<input name="max" type="number" step="0.25" min="0"></label></div>
     </div>
     <div class="actions">
-      <button type="button" class="btn" onclick="document.getElementById('addDlg').close()">Annulla</button>
+      <button type="button" class="btn" id="addCancel">Annulla</button>
       <button type="submit" class="btn primary">Aggiungi</button>
     </div>
   </form>
@@ -139,16 +137,16 @@ var DEFAULTS = [
   { name: 'Sacchi neri', unit: 'sacchi', qty: 0, soglia: 3, max: 15 }
 ];
 
+function esc(s) { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
 var state = load();
 function load() {
   try { var d = JSON.parse(localStorage.getItem(KEY)); if (d && d.items) return d; } catch (e) {}
   return { items: DEFAULTS.map(function (x) { return Object.assign({}, x); }) };
 }
-function save() { localStorage.setItem(KEY, JSON.stringify(state)); }
+function save() { try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) { alert('Salvataggio non riuscito (localStorage bloccato).'); } }
 function fmt(n) { return (Math.round(n * 100) / 100).toString().replace('.', ','); }
 
 var filter = 'all';
-var order = state.items.map(function (x) { return x.name; });
 
 function render() {
   var q = document.getElementById('search').value.toLowerCase();
@@ -165,37 +163,51 @@ function render() {
     card.className = 'card ' + (low ? 'low' : 'ok');
     var pct = Math.min(100, it.max > 0 ? (it.qty / it.max) * 100 : 100);
     card.innerHTML =
-      '<div class="row"><div class="name">' + it.name + '</div>' +
+      '<div class="row"><div class="name">' + esc(it.name) + '</div>' +
       '<span class="badge">' + (low ? 'DA ORDINARE' : 'OK') + '</span></div>' +
       '<div class="stepper">' +
-      '<button onclick="step(' + i + ',-1)">−</button>' +
-      '<input type="number" step="0.25" min="0" value="' + it.qty + '" onchange="setQty(' + i + ',this.value)">' +
-      '<button onclick="step(' + i + ',1)">+</button>' +
-      '<span class="meta">' + it.unit + '</span></div>' +
+      '<button data-a="step" data-i="' + i + '" data-d="-1">−</button>' +
+      '<input type="number" step="0.25" min="0" value="' + it.qty + '" data-a="qty" data-i="' + i + '">' +
+      '<button data-a="step" data-i="' + i + '" data-d="1">+</button>' +
+      '<span class="meta">' + esc(it.unit) + '</span></div>' +
       '<div class="bar"><div style="width:' + pct + '%"></div></div>' +
-      '<div class="meta">Soglia: ' + fmt(it.soglia) + ' · Max: ' + fmt(it.max) + ' ' + it.unit + '</div>' +
+      '<div class="meta">Soglia: ' + fmt(it.soglia) + ' · Max: ' + fmt(it.max) + ' ' + esc(it.unit) + '</div>' +
       '<div class="actions">' +
-      (low ? '<button class="btn primary" onclick="restock(' + i + ')">Rifornito (porta a ' + fmt(it.max) + ')</button>' : '') +
-      '<button class="btn" onclick="toggleEdit(' + i + ',this)">Modifica</button>' +
-      '<button class="btn danger" onclick="del(' + i + ')">Elimina</button></div>' +
+      (low ? '<button class="btn primary" data-a="restock" data-i="' + i + '">Rifornito (porta a ' + fmt(it.max) + ')</button>' : '') +
+      '<button class="btn" data-a="edit" data-i="' + i + '">Modifica</button>' +
+      '<button class="btn danger" data-a="del" data-i="' + i + '">Elimina</button></div>' +
       '<div class="edit" id="edit' + i + '">' +
-      '<div class="grid2"><div><label>Nome<input value="' + it.name + '" onchange="setField(' + i + ',\'name\',this.value)"></label></div>' +
-      '<div><label>Unità<input value="' + it.unit + '" onchange="setField(' + i + ',\'unit\',this.value)"></label></div>' +
-      '<div><label>Soglia d\'ordine<input type="number" step="0.25" min="0" value="' + it.soglia + '" onchange="setField(' + i + ',\'soglia\',this.value)"></label></div>' +
-      '<div><label>Max stock<input type="number" step="0.25" min="0" value="' + it.max + '" onchange="setField(' + i + ',\'max\',this.value)"></label></div>' +
-      '</div><label>Soglia in 1/4 di barile = 0,25 · 1/2 mensola = 0,5</label></div>';
+      '<div class="grid2"><div><label>Nome<input value="' + esc(it.name) + '" data-a="field" data-i="' + i + '" data-f="name"></label></div>' +
+      '<div><label>Unità<input value="' + esc(it.unit) + '" data-a="field" data-i="' + i + '" data-f="unit"></label></div>' +
+      '<div><label>Soglia d&#39;ordine<input type="number" step="0.25" min="0" value="' + it.soglia + '" data-a="field" data-i="' + i + '" data-f="soglia"></label></div>' +
+      '<div><label>Max stock<input type="number" step="0.25" min="0" value="' + it.max + '" data-a="field" data-i="' + i + '" data-f="max"></label></div>' +
+      '</div><label class="meta">Soglie frazionarie: 1/4 di barile = 0,25 · 1/2 mensola = 0,5</label></div>';
     listEl.appendChild(card);
   });
   document.getElementById('empty').style.display = shown ? 'none' : 'block';
-  document.getElementById('summary').textContent = 'Da ordinare: ' + lowCount + ' su ' + state.items.length;
+  document.getElementById('summary').textContent = 'Da ordinare: ' + lowCount + ' su ' + state.items.length + ' articoli';
 }
 
-function step(i, d) { state.items[i].qty = Math.max(0, state.items[i].qty + d * 0.25); save(); render(); }
-function setQty(i, v) { state.items[i].qty = Math.max(0, parseFloat(v) || 0); save(); render(); }
-function setField(i, f, v) { state.items[i][f] = (f === 'soglia' || f === 'max') ? Math.max(0, parseFloat(v) || 0) : v; save(); render(); }
-function restock(i) { state.items[i].qty = state.items[i].max; save(); render(); }
-function del(i) { if (confirm('Eliminare ' + state.items[i].name + '?')) { state.items.splice(i, 1); save(); render(); } }
-function toggleEdit(i, btn) { document.getElementById('edit' + i).classList.toggle('open'); }
+document.addEventListener('click', function (e) {
+  var t = e.target.closest('[data-a]');
+  if (!t) return;
+  var i = +t.dataset.i;
+  if (t.dataset.a === 'step') { state.items[i].qty = Math.max(0, state.items[i].qty + 0.25 * (+t.dataset.d)); save(); render(); }
+  else if (t.dataset.a === 'restock') { state.items[i].qty = state.items[i].max; save(); render(); }
+  else if (t.dataset.a === 'edit') { document.getElementById('edit' + i).classList.toggle('open'); }
+  else if (t.dataset.a === 'del') { if (confirm('Eliminare ' + state.items[i].name + '?')) { state.items.splice(i, 1); save(); render(); } }
+});
+document.addEventListener('change', function (e) {
+  var t = e.target;
+  if (!t.dataset || !t.dataset.a) return;
+  var i = +t.dataset.i;
+  if (t.dataset.a === 'qty') { state.items[i].qty = Math.max(0, parseFloat(t.value) || 0); save(); render(); }
+  else if (t.dataset.a === 'field') {
+    var f = t.dataset.f;
+    state.items[i][f] = (f === 'soglia' || f === 'max') ? Math.max(0, parseFloat(t.value) || 0) : t.value;
+    save(); render();
+  }
+});
 
 document.getElementById('f-all').onclick = function () { filter = 'all'; chips(); render(); };
 document.getElementById('f-low').onclick = function () { filter = 'low'; chips(); render(); };
@@ -205,6 +217,13 @@ function chips() {
   document.getElementById('f-all').classList.toggle('active', filter === 'all');
   document.getElementById('f-low').classList.toggle('active', filter === 'low');
 }
+document.getElementById('addCancel').onclick = function () { document.getElementById('addDlg').close(); };
+document.getElementById('shopClose').onclick = function () { document.getElementById('shoppingDlg').close(); };
+document.getElementById('copyBtn').onclick = function () {
+  var text = shopping().map(function (x) { return '- ' + x.name + ': ' + fmt(x.buy) + ' ' + x.unit; }).join('\n') || 'Niente da ordinare';
+  if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text);
+  else alert(text);
+};
 
 document.getElementById('addform').onsubmit = function (e) {
   e.preventDefault();
@@ -217,7 +236,7 @@ document.getElementById('addform').onsubmit = function (e) {
 
 function shopping() {
   return state.items.filter(function (x) { return x.qty < x.soglia; })
-    .map(function (x) { return { name: x.name, buy: Math.max(0, x.max - x.qty), unit: x.unit, soglia: x.soglia, qty: x.qty }; })
+    .map(function (x) { return { name: x.name, buy: Math.max(0, x.max - x.qty), unit: x.unit, qty: x.qty }; })
     .sort(function (a, b) { return a.name.localeCompare(b.name); });
 }
 document.getElementById('open-shopping').onclick = function () {
@@ -226,18 +245,13 @@ document.getElementById('open-shopping').onclick = function () {
   ul.innerHTML = '';
   s.forEach(function (x) {
     var li = document.createElement('li');
-    li.textContent = x.name + ': comprene ' + fmt(x.buy) + ' ' + x.unit + ' (ora ' + fmt(x.qty) + ')';
+    li.textContent = x.name + ': compra ' + fmt(x.buy) + ' ' + x.unit + ' (ora ' + fmt(x.qty) + ')';
     ul.appendChild(li);
   });
   document.getElementById('shopEmpty').style.display = s.length ? 'none' : 'block';
   document.getElementById('shopCount').textContent = '(' + s.length + ')';
   document.getElementById('shoppingDlg').showModal();
 };
-function copyShopping() {
-  var text = shopping().map(function (x) { return '- ' + x.name + ': ' + fmt(x.buy) + ' ' + x.unit; }).join('\n') || 'Niente da ordinare';
-  if (navigator.clipboard) navigator.clipboard.writeText(text);
-  else alert(text);
-}
 render();
 </script>
 </body>
